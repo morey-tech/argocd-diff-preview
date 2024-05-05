@@ -28,6 +28,7 @@ jobs:
 
       - name: Diff
         run: |
+          docker build . -f Dockerfile_AMD64 -t image
           docker run \
             --network=host \
             -v /var/run/docker.sock:/var/run/docker.sock \
@@ -36,11 +37,5 @@ jobs:
             -v $(pwd)/output:/output \
             -e TARGET_BRANCH=${{ github.head_ref }} \
             -e GIT_REPO="https://github.com/dag-andersen/argocd-diff-preview.git" \
-            dagandersen/argocd-diff-preview:latest
+            image
 
-      - name: Post diff as comment
-        run: |
-          gh pr comment ${{ github.event.number }} --edit-last --body-file output/diff.md \
-            || gh pr comment ${{ github.event.number }} --body-file output/diff.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

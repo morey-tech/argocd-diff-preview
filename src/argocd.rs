@@ -2,7 +2,7 @@ use base64::prelude::*;
 use std::{
     error::Error,
     io::Write,
-    process::{Command, Stdio},
+    process::{Command, Stdio}, time::Duration,
 };
 
 use log::{debug, error, info};
@@ -24,7 +24,14 @@ data:
 "#;
 
 pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
-    info!("🦑 Installing Argo CD...");
+    let progress_bar =  indicatif::ProgressBar::new(6);
+    progress_bar.enable_steady_tick(Duration::from_millis(100));
+    progress_bar.set_style(
+        indicatif::ProgressStyle::default_bar()
+            .template("🦑 [{elapsed_precise}] [{bar:20.cyan/blue}] {pos}/{len} {msg}")?
+            .progress_chars("##-"),
+    );
+    progress_bar.set_message("Installing Argo CD...");
 
     match run_command("kubectl create ns argocd", None).await {
         Ok(_) => (),
@@ -34,6 +41,8 @@ pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
         }
     }
 
+    progress_bar.inc(1);
+
     // Install Argo CD
     match run_command("kubectl -n argocd apply -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml", None).await {
         Ok(_) => (),
@@ -42,7 +51,9 @@ pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
             panic!("error: {}", String::from_utf8_lossy(&e.stderr))
         }
     }
-    info!("🦑 Waiting for Argo CD to start...");
+
+    progress_bar.inc(1);
+    progress_bar.set_message("Waiting for Argo CD to start...");
 
     // apply argocd-cmd-params-cm
     let mut child = Command::new("kubectl")
@@ -74,7 +85,8 @@ pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
     .await
     .expect("failed to wait for argocd-repo-server");
 
-    info!("🦑 Logging in to Argo CD through CLI...");
+    progress_bar.inc(1);
+    progress_bar.set_message("Logging in to Argo CD...");
     debug!("Port-forwarding Argo CD server...");
 
     // port-forward Argo CD server
@@ -103,6 +115,8 @@ pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
         }
     };
 
+    progress_bar.inc(1);
+
     let password_decoded_vec = BASE64_STANDARD
         .decode(password_encoded.stdout)
         .expect("failed to decode password");
@@ -130,10 +144,13 @@ pub async fn install_argo_cd() -> Result<(), Box<dyn Error>> {
     .await
     .expect("failed to login to argocd");
 
+    progress_bar.inc(1);
+
     run_command("argocd app list", None)
         .await
         .expect("Failed to run: argocd app list");
 
-    info!("🦑 Argo CD installed successfully");
+    progress_bar.inc(1);
+    progress_bar.finish_with_message("🦑 Argo CD installed successfully");
     Ok(())
 }
